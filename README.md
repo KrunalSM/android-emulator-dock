@@ -9,6 +9,8 @@
 
 Unlike traditional setups that attempt fragile X11 window reparenting or compositor nesting, AED communicates directly with official Android Emulator instances over authenticated **gRPC**. Frames are rendered via hardware-accelerated OpenGL surfaces inside a native Wayland client, and user inputs are routed through the emulator's official controller APIs.
 
+> **Disclaimer**: This is an independent open-source project. It is **not** affiliated with, endorsed by, or sponsored by Google, Android, or Android Studio. "Android" and "Android Studio" are trademarks of Google LLC.
+
 ---
 
 ## Architecture Overview
