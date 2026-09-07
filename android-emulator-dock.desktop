@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Android Emulator Dock
+GenericName=Android Emulator Manager
+Comment=Standalone Linux workspace for hosting multiple official Android Emulators
+Exec=android-emulator-dock
+Icon=android-emulator-dock
+Terminal=false
+Categories=Development;Utility;
+Keywords=Android;Emulator;Wayland;Qt;
