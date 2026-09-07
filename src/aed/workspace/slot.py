@@ -19,6 +19,7 @@ class EmulatorSlot(QFrame):
         self.instance = instance
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setLineWidth(1)
+        self.setMinimumSize(200, 200)
         self.setStyleSheet("""
             EmulatorSlot {
                 background-color: #1e1e24;

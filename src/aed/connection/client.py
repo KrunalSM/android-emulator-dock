@@ -12,7 +12,7 @@ import grpc
 # Add generated proto dir to sys.path (handles both dev tree and site-packages)
 _client_dir = Path(__file__).resolve().parent
 _possible_proto_dirs = [
-    _client_dir.parent.parent.parent.parent / "proto",  # Dev source tree (AED/proto)
+    _client_dir.parent.parent.parent / "proto",  # Dev source tree (AED/proto)
     _client_dir.parent.parent / "proto",                # Installed site-packages (site-packages/proto)
 ]
 for pdir in _possible_proto_dirs:
