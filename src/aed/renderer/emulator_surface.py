@@ -35,9 +35,14 @@ class EmulatorSurface(QOpenGLWidget):
         """Receive new frame bytes from background worker."""
         self._device_width = width
         self._device_height = height
-        # Construct QImage sharing the memory block, then retain an explicit copy to allow buffer reuse
         img = QImage(frame_bytes, width, height, bytes_per_line, QImage.Format.Format_RGBA8888)
         self._current_image = img.copy()
+        self.update()
+
+    def clear(self):
+        """Clear current frame to prevent stale or frozen frames upon emulator stop."""
+        self._current_image = None
+        self._is_mouse_down = False
         self.update()
 
     def paintGL(self):
@@ -49,9 +54,9 @@ class EmulatorSurface(QOpenGLWidget):
         painter.fillRect(self.rect(), QColor(18, 18, 20))
 
         if not self._current_image or self._current_image.isNull():
-            # Draw placeholder
+            # Draw empty/stopped placeholder
             painter.setPen(QColor(120, 120, 130))
-            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Waiting for display output...")
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Emulator Stopped")
             painter.end()
             return
 
@@ -83,9 +88,7 @@ class EmulatorSurface(QOpenGLWidget):
         if not self._target_rect.isValid() or self._target_rect.width() <= 0 or self._target_rect.height() <= 0:
             return None
 
-        # Check if inside target display rect
         if not self._target_rect.contains(pos):
-            # Clamp or ignore if outside
             x_rel = min(max(pos.x() - self._target_rect.left(), 0.0), self._target_rect.width())
             y_rel = min(max(pos.y() - self._target_rect.top(), 0.0), self._target_rect.height())
         else:

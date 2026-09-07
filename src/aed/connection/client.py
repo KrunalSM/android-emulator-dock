@@ -24,8 +24,33 @@ from aed.logging_util import get_logger
 
 logger = get_logger("connection.client")
 
+# Map human-friendly pane names to official proto PaneIndex
+PANE_INDEX_MAP = {
+    "LOCATION": uc.PaneEntry.LOCATION,
+    "MULTIDISPLAY": uc.PaneEntry.MULTIDISPLAY,
+    "CELLULAR": uc.PaneEntry.CELLULAR,
+    "BATTERY": uc.PaneEntry.BATTERY,
+    "CAMERA": uc.PaneEntry.CAMERA,
+    "TELEPHONE": uc.PaneEntry.TELEPHONE,
+    "DPAD": uc.PaneEntry.DPAD,
+    "TV_REMOTE": uc.PaneEntry.TV_REMOTE,
+    "ROTARY": uc.PaneEntry.ROTARY,
+    "MICROPHONE": uc.PaneEntry.MICROPHONE,
+    "FINGER": uc.PaneEntry.FINGER,
+    "VIRT_SENSORS": uc.PaneEntry.VIRT_SENSORS,
+    "SNAPSHOT": uc.PaneEntry.SNAPSHOT,
+    "BUGREPORT": uc.PaneEntry.BUGREPORT,
+    "RECORD": uc.PaneEntry.RECORD,
+    "GOOGLE_PLAY": uc.PaneEntry.GOOGLE_PLAY,
+    "SETTINGS": uc.PaneEntry.SETTINGS,
+    "HELP": uc.PaneEntry.HELP,
+    "CAR": uc.PaneEntry.CAR,
+    "CAR_ROTARY": uc.PaneEntry.CAR_ROTARY,
+    "SENSOR_REPLAY": uc.PaneEntry.SENSOR_REPLAY,
+}
+
 class EmulatorConnection:
-    """Manages gRPC transport, frame streaming, input forwarding, and extended controls."""
+    """Manages gRPC transport, frame streaming, input forwarding, device controls, and extended controls."""
 
     def __init__(self, host: str, port: int, token: str):
         self._host = host
@@ -35,7 +60,7 @@ class EmulatorConnection:
         self._controller_stub: Optional[ec_grpc.EmulatorControllerStub] = None
         self._ui_stub: Optional[uc_grpc.UiControllerStub] = None
         self._is_connected = False
-        self._wheel_queue: Optional[queue.Queue] = None
+        self._current_rotation = 0  # 0: PORTRAIT, 1: LANDSCAPE, 2: REVERSE_PORTRAIT, 3: REVERSE_LANDSCAPE
 
     @property
     def is_connected(self) -> bool:
@@ -97,6 +122,21 @@ class EmulatorConnection:
             logger.error("Failed to start frame stream: %s", e)
             return None
 
+    def get_screenshot(self, width: int = 0, height: int = 0):
+        """Capture a single full-resolution screenshot."""
+        if not self._is_connected or not self._controller_stub:
+            return None
+        try:
+            fmt = ec.ImageFormat(
+                format=ec.ImageFormat.RGBA8888,
+                width=width,
+                height=height
+            )
+            return self._controller_stub.getScreenshot(fmt, metadata=self._metadata())
+        except Exception as e:
+            logger.error("Failed to get screenshot: %s", e)
+            return None
+
     def send_touch(self, x: int, y: int, pressure: int = 1, identifier: int = 0):
         """Send touch point event (pressure: 1 for down/move, 0 for up)."""
         if not self._is_connected or not self._controller_stub:
@@ -129,6 +169,74 @@ class EmulatorConnection:
         except Exception as e:
             logger.warning("Error sending key event: %s", e)
 
+    # Standard Android Navigation & Hardware Controls
+    def send_back(self):
+        """Send Android Back navigation event."""
+        self.send_key(key_code="GoBack")
+
+    def send_home(self):
+        """Send Android Home navigation event."""
+        self.send_key(key_code="GoHome")
+
+    def send_recents(self):
+        """Send Android Overview/Recents navigation event."""
+        self.send_key(key_code="AppSwitch")
+
+    def send_power(self):
+        """Send Android Power button event."""
+        self.send_key(key_code="Power")
+
+    def send_volume_up(self):
+        """Send Android Volume Up hardware key event."""
+        self.send_key(key_code="AudioVolumeUp")
+
+    def send_volume_down(self):
+        """Send Android Volume Down hardware key event."""
+        self.send_key(key_code="AudioVolumeDown")
+
+    def rotate_device(self):
+        """Rotate device orientation 90 degrees clockwise."""
+        if not self._is_connected or not self._controller_stub:
+            return
+        try:
+            self._current_rotation = (self._current_rotation + 1) % 4
+            # PhysicalModelValue with ROTATION
+            # ROTATION expects z-axis angle (0, 90, 180, 270)
+            angles = [0.0, 90.0, 180.0, 270.0]
+            val = angles[self._current_rotation]
+            param = ec.ParameterValue(data=[0.0, 0.0, val])
+            req = ec.PhysicalModelValue(
+                target=ec.PhysicalModelValue.PhysicalType.ROTATION,
+                value=param
+            )
+            self._controller_stub.setPhysicalModel(req, metadata=self._metadata())
+            logger.info("Rotated device to %d deg", int(val))
+        except Exception as e:
+            logger.warning("Error rotating device: %s", e)
+
+    def set_fold_posture(self, posture_name: str = "POSTURE_OPENED"):
+        """Set foldable device posture (e.g. POSTURE_OPENED, POSTURE_CLOSED, POSTURE_HALF_OPENED)."""
+        if not self._is_connected or not self._controller_stub:
+            return
+        try:
+            val = getattr(ec.Posture.PostureValue, posture_name, ec.Posture.PostureValue.POSTURE_OPENED)
+            req = ec.Posture(value=val)
+            self._controller_stub.setPosture(req, metadata=self._metadata())
+            logger.info("Set fold posture to %s", posture_name)
+        except Exception as e:
+            logger.warning("Error setting posture: %s", e)
+
+    def send_fingerprint(self, touch_id: int = 1):
+        """Trigger virtual fingerprint touch event."""
+        if not self._is_connected or not self._controller_stub:
+            return
+        try:
+            req = ec.Fingerprint(isTouching=True, touchId=touch_id)
+            self._controller_stub.sendFingerprint(req, metadata=self._metadata())
+            logger.info("Dispatched virtual fingerprint touch (touchId=%d)", touch_id)
+        except Exception as e:
+            logger.warning("Error sending fingerprint: %s", e)
+
     def send_mouse(self, x: int, y: int, buttons: int = 0):
         """Send mouse coordinates and buttons."""
         if not self._is_connected or not self._controller_stub:
@@ -156,18 +264,7 @@ class EmulatorConnection:
         if not self._is_connected or not self._ui_stub:
             return False
         try:
-            pane_enum = uc.PaneEntry.LOCATION
-            if pane.upper() == "BATTERY":
-                pane_enum = uc.PaneEntry.BATTERY
-            elif pane.upper() == "CELLULAR":
-                pane_enum = uc.PaneEntry.CELLULAR
-            elif pane.upper() == "CAMERA":
-                pane_enum = uc.PaneEntry.CAMERA
-            elif pane.upper() == "SETTINGS":
-                pane_enum = uc.PaneEntry.SETTINGS
-            elif pane.upper() == "SNAPSHOT":
-                pane_enum = uc.PaneEntry.SNAPSHOT
-
+            pane_enum = PANE_INDEX_MAP.get(pane.upper(), uc.PaneEntry.LOCATION)
             logger.info("Opening official Extended Controls (%s)", pane)
             req = uc.PaneEntry(index=pane_enum)
             self._ui_stub.showExtendedControls(req, metadata=self._metadata())

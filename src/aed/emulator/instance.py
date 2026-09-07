@@ -14,6 +14,7 @@ from aed.emulator.state import EmulatorState
 from aed.emulator.discovery import find_running_emulator_by_pid, RunningEmulatorInfo
 from aed.connection.client import EmulatorConnection
 from aed.connection.stream_worker import FrameStreamWorker
+from aed.connection.screenshot_service import ScreenshotService
 from aed.renderer.emulator_surface import EmulatorSurface
 from aed.logging_util import get_logger
 
@@ -25,6 +26,7 @@ class EmulatorInstance(QObject):
     state_changed = pyqtSignal(EmulatorState)
     fps_updated = pyqtSignal(float)
     error_occurred = pyqtSignal(str)
+    screenshot_saved = pyqtSignal(str)
 
     def __init__(self, avd: AvdInfo, emulator_binary: Path, parent: Optional[QObject] = None):
         super().__init__(parent)
@@ -37,6 +39,7 @@ class EmulatorInstance(QObject):
         self._discovery_info: Optional[RunningEmulatorInfo] = None
         self._connection: Optional[EmulatorConnection] = None
         self._stream_worker: Optional[FrameStreamWorker] = None
+        self._screenshot_service: Optional[ScreenshotService] = None
 
         self._surface = EmulatorSurface()
         self._setup_surface_events()
@@ -49,6 +52,10 @@ class EmulatorInstance(QObject):
     @property
     def surface(self) -> EmulatorSurface:
         return self._surface
+
+    @property
+    def connection(self) -> Optional[EmulatorConnection]:
+        return self._connection
 
     def _set_state(self, new_state: EmulatorState):
         if self.state != new_state:
@@ -82,12 +89,57 @@ class EmulatorInstance(QObject):
         if self._connection and self._connection.is_connected:
             self._connection.send_key(text=key_text, key_code=key_code)
 
+    # Navigation & Hardware Controls
+    def send_back(self):
+        if self._connection and self._connection.is_connected:
+            self._connection.send_back()
+
+    def send_home(self):
+        if self._connection and self._connection.is_connected:
+            self._connection.send_home()
+
+    def send_recents(self):
+        if self._connection and self._connection.is_connected:
+            self._connection.send_recents()
+
+    def send_power(self):
+        if self._connection and self._connection.is_connected:
+            self._connection.send_power()
+
+    def send_volume_up(self):
+        if self._connection and self._connection.is_connected:
+            self._connection.send_volume_up()
+
+    def send_volume_down(self):
+        if self._connection and self._connection.is_connected:
+            self._connection.send_volume_down()
+
+    def rotate_device(self):
+        if self._connection and self._connection.is_connected:
+            self._connection.rotate_device()
+
+    def send_fingerprint(self, touch_id: int = 1):
+        if self._connection and self._connection.is_connected:
+            self._connection.send_fingerprint(touch_id)
+
+    def set_fold_posture(self, posture: str):
+        if self._connection and self._connection.is_connected:
+            self._connection.set_fold_posture(posture)
+
+    def take_screenshot(self) -> Optional[Path]:
+        if self._screenshot_service:
+            path = self._screenshot_service.capture_screenshot()
+            if path:
+                self.screenshot_saved.emit(str(path))
+                return path
+        return None
+
     def show_extended_controls(self, pane: str = "LOCATION"):
         if self._connection and self._connection.is_connected:
             self._connection.show_extended_controls(pane)
 
     def start(self):
-        """Launch the official emulator binary with hosting flags."""
+        """Launch official emulator with full audio and boot animation support."""
         if not self.state.can_start():
             logger.warning("[%s] Cannot start in state %s", self.avd.name, self.state)
             return
@@ -95,14 +147,12 @@ class EmulatorInstance(QObject):
         self._set_state(EmulatorState.LAUNCHING)
         self._process = QProcess(self)
 
-        # Hosting flags per architecture
+        # Retain hosting flags, remove -no-audio and -no-boot-anim for complete parity
         args = [
             "-avd", self.avd.name,
             "-qt-hide-window",
             "-grpc-use-token",
             "-idle-grpc-timeout", "300",
-            "-no-audio",
-            "-no-boot-anim",
         ]
 
         self._process.errorOccurred.connect(self._on_process_error)
@@ -158,6 +208,7 @@ class EmulatorInstance(QObject):
             self.error_occurred.emit(f"Could not connect to gRPC on port {self._discovery_info.grpc_port}")
             return
 
+        self._screenshot_service = ScreenshotService(self._connection, self.avd.name)
         self._set_state(EmulatorState.BOOTING)
         self._start_stream()
 
@@ -165,22 +216,25 @@ class EmulatorInstance(QObject):
         if not self._connection:
             return
 
-        # Start streaming worker
         self._stream_worker = FrameStreamWorker(self._connection, target_width=1080, target_height=2400)
         self._stream_worker.frame_ready.connect(self._on_frame_ready)
         self._stream_worker.fps_updated.connect(self._on_fps_updated)
         self._stream_worker.start()
 
     def _on_frame_ready(self, frame_bytes: bytes, w: int, h: int, bpl: int):
+        # Discard late arriving frames if stopping or stopped
+        if not self.state.is_active():
+            return
         if self.state == EmulatorState.BOOTING:
             self._set_state(EmulatorState.RUNNING)
         self._surface.update_frame(frame_bytes, w, h, bpl)
 
     def _on_fps_updated(self, fps: float):
-        self.fps_updated.emit(fps)
+        if self.state == EmulatorState.RUNNING:
+            self.fps_updated.emit(fps)
 
     def stop(self):
-        """Cleanly terminate emulator."""
+        """Cleanly terminate emulator and reset renderer."""
         self._set_state(EmulatorState.STOPPING)
         self._discovery_timer.stop()
 
@@ -193,11 +247,16 @@ class EmulatorInstance(QObject):
             self._connection.disconnect()
             self._connection = None
 
+        self._screenshot_service = None
+
         if self._process and self._process.state() != QProcess.ProcessState.NotRunning:
             logger.info("[%s] Terminating emulator process PID %s", self.avd.name, self._pid)
             self._process.terminate()
             if not self._process.waitForFinished(3000):
                 self._process.kill()
+
+        # Clear surface to remove frozen frame
+        self._surface.clear()
         self._set_state(EmulatorState.STOPPED)
 
     def _on_process_error(self, err):
@@ -207,4 +266,5 @@ class EmulatorInstance(QObject):
     def _on_process_finished(self, exit_code, exit_status):
         logger.info("[%s] Process finished (code=%d, status=%s)", self.avd.name, exit_code, exit_status)
         if self.state != EmulatorState.STOPPED:
+            self._surface.clear()
             self._set_state(EmulatorState.DISCONNECTED)
