@@ -83,7 +83,17 @@ pip install --user .
 ```
 *(Alternatively, use `pipx install .` for isolated environments).*
 
-### 3. Local Development Installation
+### 3. Desktop Entry Integration
+To add AED to your system's application launcher (GNOME, KDE, etc.) with the official icon, run the following commands to copy the provided desktop file and icon to your standard user directories:
+```bash
+mkdir -p ~/.local/share/icons/hicolor/512x512/apps/ ~/.local/share/applications/
+cp assets/logo.png ~/.local/share/icons/hicolor/512x512/apps/android-emulator-dock.png
+cp android-emulator-dock.desktop ~/.local/share/applications/
+gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor || true
+update-desktop-database ~/.local/share/applications/ || true
+```
+
+### 4. Local Development Installation
 If you are developing AED, use a virtual environment:
 ```bash
 python3 -m venv .venv
