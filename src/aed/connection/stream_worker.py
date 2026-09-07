@@ -4,12 +4,14 @@ Ensures zero UI thread blocking during network and frame consumption.
 """
 
 import time
-from typing import Optional
+
 from PyQt6.QtCore import QThread, pyqtSignal
+
 from aed.connection.client import EmulatorConnection
 from aed.logging_util import get_logger
 
 logger = get_logger("connection.stream")
+
 
 class FrameStreamWorker(QThread):
     """Background worker that continuously pulls frames from EmulatorController.streamScreenshot."""
@@ -43,10 +45,7 @@ class FrameStreamWorker(QThread):
 
         while self._is_running:
             try:
-                stream = self._connection.get_frame_stream(
-                    width=self._target_width,
-                    height=self._target_height
-                )
+                stream = self._connection.get_frame_stream(width=self._target_width, height=self._target_height)
                 if not stream:
                     time.sleep(0.5)
                     continue

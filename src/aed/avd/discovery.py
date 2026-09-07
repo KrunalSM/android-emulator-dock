@@ -4,11 +4,13 @@ import os
 import subprocess
 from pathlib import Path
 from typing import List, Optional
+
+from aed.avd.model import AvdInfo
 from aed.logging_util import get_logger
 from aed.platform.sdk import get_emulator_binary
-from aed.avd.model import AvdInfo
 
 logger = get_logger("avd.discovery")
+
 
 def get_avd_home_dir() -> Path:
     """Determine the directory storing AVD definitions."""
@@ -17,6 +19,7 @@ def get_avd_home_dir() -> Path:
         if p.exists():
             return p
     return Path.home() / ".android" / "avd"
+
 
 def parse_ini_file(path: Path) -> dict:
     """Parse key=value ini configuration file."""
@@ -35,6 +38,7 @@ def parse_ini_file(path: Path) -> dict:
     except Exception as e:
         logger.warning("Error reading %s: %s", path, e)
     return res
+
 
 def list_avds(emulator_bin: Optional[Path] = None) -> List[AvdInfo]:
     """Discover all available Android Virtual Devices."""

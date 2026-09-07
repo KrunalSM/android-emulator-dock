@@ -2,6 +2,7 @@
 
 from enum import Enum, auto
 
+
 class EmulatorState(Enum):
     STOPPED = auto()
     LAUNCHING = auto()

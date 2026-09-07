@@ -1,7 +1,8 @@
 """Comprehensive dark theme and palette configuration for Android Emulator Dock."""
 
-from PyQt6.QtGui import QPalette, QColor
+from PyQt6.QtGui import QColor, QPalette
 from PyQt6.QtWidgets import QApplication
+
 
 def apply_dark_theme(app: QApplication):
     """Apply a complete dark QPalette and global stylesheet to eliminate white-on-white artifacts."""

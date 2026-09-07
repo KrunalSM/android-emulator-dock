@@ -3,7 +3,8 @@
 import os
 import shutil
 from pathlib import Path
-from typing import Optional, List, Tuple
+from typing import Optional
+
 from aed.logging_util import get_logger
 
 logger = get_logger("platform.sdk")
@@ -15,6 +16,7 @@ STANDARD_LINUX_SDK_LOCATIONS = [
     Path("/usr/lib/android-sdk"),
     Path("/mnt/extra/Software/LinuxSDK"),
 ]
+
 
 def find_android_sdk(custom_path: Optional[str] = None) -> Optional[Path]:
     """Find Android SDK root directory checking custom path, env, PATH, and standard Linux locations."""
@@ -50,6 +52,7 @@ def find_android_sdk(custom_path: Optional[str] = None) -> Optional[Path]:
     logger.warning("Android SDK could not be automatically located")
     return None
 
+
 def get_emulator_binary(sdk_path: Optional[Path] = None) -> Optional[Path]:
     """Get path to official emulator executable."""
     if sdk_path and (sdk_path / "emulator" / "emulator").exists():
@@ -64,6 +67,7 @@ def get_emulator_binary(sdk_path: Optional[Path] = None) -> Optional[Path]:
         return detected_sdk / "emulator" / "emulator"
 
     return None
+
 
 def get_adb_binary(sdk_path: Optional[Path] = None) -> Optional[Path]:
     """Get path to adb executable."""

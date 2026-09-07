@@ -1,8 +1,11 @@
 """Workspace manager handling layout organization (Single, Columns, Grid) and multiple slots."""
 
-from typing import List, Optional
-from PyQt6.QtWidgets import QWidget, QGridLayout, QSizePolicy
+from typing import List
+
+from PyQt6.QtWidgets import QGridLayout, QWidget
+
 from aed.workspace.slot import EmulatorSlot
+
 
 class WorkspaceLayoutManager(QWidget):
     """Manages slot arrangement in Single, Two-Column, or 2x2 Grid modes."""
@@ -41,7 +44,7 @@ class WorkspaceLayoutManager(QWidget):
     def relayout(self):
         # Clear layout items without deleting slots
         while self.grid_layout.count() > 0:
-            item = self.grid_layout.takeAt(0)
+            self.grid_layout.takeAt(0)
 
         count = len(self._slots)
         if count == 0:

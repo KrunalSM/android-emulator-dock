@@ -2,7 +2,8 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Dict, Optional
+
 
 @dataclass
 class AvdInfo:

@@ -1,14 +1,13 @@
 """Visual UI slot hosting an EmulatorInstance with full toolbar, controls, and display."""
 
-from typing import Optional
-from PyQt6.QtWidgets import (
-    QFrame, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMenu, QWidgetAction, QToolTip
-)
-from PyQt6.QtCore import Qt, pyqtSignal, QPoint
-from PyQt6.QtGui import QFont, QKeyEvent, QAction
+
+from PyQt6.QtCore import QPoint, Qt, pyqtSignal
+from PyQt6.QtGui import QFont, QKeyEvent
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QPushButton, QToolTip, QVBoxLayout
 
 from aed.emulator.instance import EmulatorInstance
 from aed.emulator.state import EmulatorState
+
 
 class EmulatorSlot(QFrame):
     """Container widget representing a single workspace slot with complete controls."""
@@ -171,9 +170,15 @@ class EmulatorSlot(QFrame):
         tb_layout.addWidget(self.btn_more)
 
         self._toolbar_buttons = [
-            self.btn_back, self.btn_home, self.btn_recents,
-            self.btn_rotate, self.btn_vol_down, self.btn_vol_up,
-            self.btn_dev_power, self.btn_screenshot, self.btn_more
+            self.btn_back,
+            self.btn_home,
+            self.btn_recents,
+            self.btn_rotate,
+            self.btn_vol_down,
+            self.btn_vol_up,
+            self.btn_dev_power,
+            self.btn_screenshot,
+            self.btn_more,
         ]
 
         layout.addWidget(header)
@@ -263,7 +268,7 @@ class EmulatorSlot(QFrame):
                 self.btn_screenshot.mapToGlobal(QPoint(0, self.btn_screenshot.height())),
                 f"Saved to {path.name}",
                 self.btn_screenshot,
-                msecShowTime=3000
+                msecShowTime=3000,
             )
 
     def _on_screenshot_saved(self, path_str: str):
@@ -277,7 +282,16 @@ class EmulatorSlot(QFrame):
 
     def _on_state_changed(self, state: EmulatorState):
         self.state_lbl.setText(state.display_name())
-        is_running = (state == EmulatorState.RUNNING)
+        is_running = state == EmulatorState.RUNNING
+
+        if state == EmulatorState.RUNNING:
+            self.state_lbl.setStyleSheet("color: #00d26a; font-size: 11px;")
+        elif state == EmulatorState.STOPPED:
+            self.state_lbl.setStyleSheet("color: #aaaaaa; font-size: 11px;")
+        elif state in [EmulatorState.LAUNCHING, EmulatorState.WAITING_FOR_DISCOVERY, EmulatorState.CONNECTING, EmulatorState.BOOTING, EmulatorState.STOPPING]:
+            self.state_lbl.setStyleSheet("color: #ff9800; font-size: 11px;")
+        else:
+            self.state_lbl.setStyleSheet("color: #ff5555; font-size: 11px;")
 
         for btn in self._toolbar_buttons:
             btn.setEnabled(is_running)
@@ -313,6 +327,18 @@ class EmulatorSlot(QFrame):
             self.fps_lbl.setText("")
         else:
             self.btn_power.setText("Cancel")
+            self.btn_power.setStyleSheet("""
+                QPushButton {
+                    background-color: #f57c00;
+                    color: #ffffff;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 4px 10px;
+                    font-weight: bold;
+                    font-size: 11px;
+                }
+                QPushButton:hover { background-color: #fb8c00; }
+            """)
 
     def _on_fps_updated(self, fps: float):
         if self.instance.state == EmulatorState.RUNNING:

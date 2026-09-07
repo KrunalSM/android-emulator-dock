@@ -1,24 +1,21 @@
 """Single Emulator instance managing process, discovery, gRPC connection, and renderer."""
 
-import os
-import time
 from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import QObject, QProcess, QTimer, pyqtSignal
-from PyQt6.QtGui import QKeyEvent
-from PyQt6.QtCore import Qt
 
 from aed.avd.model import AvdInfo
-from aed.emulator.state import EmulatorState
-from aed.emulator.discovery import find_running_emulator_by_pid, RunningEmulatorInfo
 from aed.connection.client import EmulatorConnection
-from aed.connection.stream_worker import FrameStreamWorker
 from aed.connection.screenshot_service import ScreenshotService
-from aed.renderer.emulator_surface import EmulatorSurface
+from aed.connection.stream_worker import FrameStreamWorker
+from aed.emulator.discovery import RunningEmulatorInfo, find_running_emulator_by_pid
+from aed.emulator.state import EmulatorState
 from aed.logging_util import get_logger
+from aed.renderer.emulator_surface import EmulatorSurface
 
 logger = get_logger("emulator.instance")
+
 
 class EmulatorInstance(QObject):
     """Encapsulates a single Android Virtual Device instance lifecycle and gRPC bridge."""
@@ -145,14 +142,29 @@ class EmulatorInstance(QObject):
             return
 
         self._set_state(EmulatorState.LAUNCHING)
+        
+        # Clean up stale locks that could prevent launch
+        if self.avd.path and self.avd.path.exists():
+            import shutil
+            for lock_item in self.avd.path.glob("*.lock"):
+                try:
+                    if lock_item.is_dir():
+                        shutil.rmtree(lock_item, ignore_errors=True)
+                    else:
+                        lock_item.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
         self._process = QProcess(self)
 
         # Retain hosting flags, remove -no-audio and -no-boot-anim for complete parity
         args = [
-            "-avd", self.avd.name,
+            "-avd",
+            self.avd.name,
             "-qt-hide-window",
             "-grpc-use-token",
-            "-idle-grpc-timeout", "300",
+            "-idle-grpc-timeout",
+            "300",
         ]
 
         self._process.errorOccurred.connect(self._on_process_error)
@@ -198,9 +210,7 @@ class EmulatorInstance(QObject):
 
         self._set_state(EmulatorState.CONNECTING)
         self._connection = EmulatorConnection(
-            host="127.0.0.1",
-            port=self._discovery_info.grpc_port,
-            token=self._discovery_info.grpc_token
+            host="127.0.0.1", port=self._discovery_info.grpc_port, token=self._discovery_info.grpc_token
         )
 
         if not self._connection.connect():
@@ -240,7 +250,7 @@ class EmulatorInstance(QObject):
 
         if self._stream_worker:
             self._stream_worker.stop()
-            self._stream_worker.wait(1000)
+            self._stream_worker.wait(3000)
             self._stream_worker = None
 
         if self._connection:
@@ -252,7 +262,7 @@ class EmulatorInstance(QObject):
         if self._process and self._process.state() != QProcess.ProcessState.NotRunning:
             logger.info("[%s] Terminating emulator process PID %s", self.avd.name, self._pid)
             self._process.terminate()
-            if not self._process.waitForFinished(3000):
+            if not self._process.waitForFinished(10000):
                 self._process.kill()
 
         # Clear surface to remove frozen frame

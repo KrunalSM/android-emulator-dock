@@ -1,22 +1,20 @@
 """Main Application Window for Android Emulator Dock (native Wayland)."""
 
-from typing import Optional, List
-from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QToolBar,
-    QComboBox, QPushButton, QLabel, QMessageBox, QStatusBar
-)
-from PyQt6.QtGui import QAction, QIcon
-from PyQt6.QtCore import Qt
+from typing import List
 
-from aed.platform.sdk import find_android_sdk, get_emulator_binary
+from PyQt6.QtCore import QTimer
+from PyQt6.QtWidgets import QComboBox, QLabel, QMainWindow, QMessageBox, QPushButton, QStatusBar, QToolBar
+
 from aed.avd.discovery import list_avds
 from aed.avd.model import AvdInfo
 from aed.emulator.instance import EmulatorInstance
-from aed.workspace.slot import EmulatorSlot
-from aed.workspace.manager import WorkspaceLayoutManager
 from aed.logging_util import get_logger
+from aed.platform.sdk import find_android_sdk, get_emulator_binary
+from aed.workspace.manager import WorkspaceLayoutManager
+from aed.workspace.slot import EmulatorSlot
 
 logger = get_logger("ui.mainwindow")
+
 
 class MainWindow(QMainWindow):
     """Main window hosting emulator workspace."""
@@ -32,6 +30,17 @@ class MainWindow(QMainWindow):
 
         self._init_ui()
         self._refresh_avds()
+        QTimer.singleShot(0, self._check_sdk_on_startup)
+
+    def _check_sdk_on_startup(self):
+        if not self._emulator_bin:
+            QMessageBox.warning(
+                self,
+                "Android SDK Not Found",
+                "Could not locate the official Android Emulator executable.\n\n"
+                "Please ensure the Android SDK is installed and ANDROID_HOME "
+                "or ANDROID_SDK_ROOT is set in your environment variables.",
+            )
 
     def _init_ui(self):
         # Dark modern palette
@@ -131,8 +140,9 @@ class MainWindow(QMainWindow):
         avd = self._avds[idx]
         if not self._emulator_bin or not self._emulator_bin.exists():
             QMessageBox.critical(
-                self, "SDK Error",
-                "Official emulator executable not found.\nPlease set ANDROID_HOME or configure SDK location."
+                self,
+                "SDK Error",
+                "Official emulator executable not found.\nPlease set ANDROID_HOME or configure SDK location.",
             )
             return
 

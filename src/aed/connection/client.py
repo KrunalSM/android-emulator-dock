@@ -4,9 +4,9 @@ UI code interacts with this client and NEVER directly imports or calls raw gRPC 
 """
 
 import sys
-import queue
 from pathlib import Path
-from typing import Optional, Iterator, Tuple, Callable
+from typing import Iterator, Optional
+
 import grpc
 
 # Add generated proto dir to sys.path
@@ -14,13 +14,13 @@ proto_dir = Path(__file__).resolve().parent.parent.parent.parent / "proto"
 if str(proto_dir) not in sys.path:
     sys.path.insert(0, str(proto_dir))
 
-import emulator_controller_pb2 as ec
-import emulator_controller_pb2_grpc as ec_grpc
-import ui_controller_service_pb2 as uc
-import ui_controller_service_pb2_grpc as uc_grpc
-from google.protobuf import empty_pb2
+import emulator_controller_pb2 as ec  # noqa: E402
+import emulator_controller_pb2_grpc as ec_grpc  # noqa: E402
+import ui_controller_service_pb2 as uc  # noqa: E402
+import ui_controller_service_pb2_grpc as uc_grpc  # noqa: E402
+from google.protobuf import empty_pb2  # noqa: E402
 
-from aed.logging_util import get_logger
+from aed.logging_util import get_logger  # noqa: E402
 
 logger = get_logger("connection.client")
 
@@ -49,6 +49,7 @@ PANE_INDEX_MAP = {
     "SENSOR_REPLAY": uc.PaneEntry.SENSOR_REPLAY,
 }
 
+
 class EmulatorConnection:
     """Manages gRPC transport, frame streaming, input forwarding, device controls, and extended controls."""
 
@@ -74,9 +75,9 @@ class EmulatorConnection:
             self._channel = grpc.insecure_channel(
                 target,
                 options=[
-                    ('grpc.max_receive_message_length', 64 * 1024 * 1024),
-                    ('grpc.max_send_message_length', 64 * 1024 * 1024),
-                ]
+                    ("grpc.max_receive_message_length", 64 * 1024 * 1024),
+                    ("grpc.max_send_message_length", 64 * 1024 * 1024),
+                ],
             )
             grpc.channel_ready_future(self._channel).result(timeout=timeout)
             self._controller_stub = ec_grpc.EmulatorControllerStub(self._channel)
@@ -112,11 +113,7 @@ class EmulatorConnection:
         if not self._is_connected or not self._controller_stub:
             return None
         try:
-            fmt = ec.ImageFormat(
-                format=ec.ImageFormat.RGBA8888,
-                width=width,
-                height=height
-            )
+            fmt = ec.ImageFormat(format=ec.ImageFormat.RGBA8888, width=width, height=height)
             return self._controller_stub.streamScreenshot(fmt, metadata=self._metadata())
         except Exception as e:
             logger.error("Failed to start frame stream: %s", e)
@@ -127,11 +124,7 @@ class EmulatorConnection:
         if not self._is_connected or not self._controller_stub:
             return None
         try:
-            fmt = ec.ImageFormat(
-                format=ec.ImageFormat.RGBA8888,
-                width=width,
-                height=height
-            )
+            fmt = ec.ImageFormat(format=ec.ImageFormat.RGBA8888, width=width, height=height)
             return self._controller_stub.getScreenshot(fmt, metadata=self._metadata())
         except Exception as e:
             logger.error("Failed to get screenshot: %s", e)
@@ -205,10 +198,7 @@ class EmulatorConnection:
             angles = [0.0, 90.0, 180.0, 270.0]
             val = angles[self._current_rotation]
             param = ec.ParameterValue(data=[0.0, 0.0, val])
-            req = ec.PhysicalModelValue(
-                target=ec.PhysicalModelValue.PhysicalType.ROTATION,
-                value=param
-            )
+            req = ec.PhysicalModelValue(target=ec.PhysicalModelValue.PhysicalType.ROTATION, value=param)
             self._controller_stub.setPhysicalModel(req, metadata=self._metadata())
             logger.info("Rotated device to %d deg", int(val))
         except Exception as e:
@@ -253,8 +243,10 @@ class EmulatorConnection:
             return
         try:
             we = ec.WheelEvent(dx=dx, dy=dy)
+
             def wheel_gen():
                 yield we
+
             self._controller_stub.injectWheel(wheel_gen(), metadata=self._metadata())
         except Exception as e:
             logger.warning("Error injecting wheel event: %s", e)

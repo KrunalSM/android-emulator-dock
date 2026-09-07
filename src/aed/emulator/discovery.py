@@ -1,12 +1,14 @@
 """Discovery for running emulator instances via $XDG_RUNTIME_DIR/avd/running."""
 
 import os
-from pathlib import Path
-from typing import Optional, Dict
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, Optional
+
 from aed.logging_util import get_logger
 
 logger = get_logger("emulator.discovery")
+
 
 @dataclass
 class RunningEmulatorInfo:
@@ -20,6 +22,7 @@ class RunningEmulatorInfo:
     emulator_version: Optional[str] = None
     ini_path: Optional[Path] = None
 
+
 def get_running_avd_dir() -> Path:
     """Get the running AVD directory."""
     xdg_runtime = os.environ.get("XDG_RUNTIME_DIR")
@@ -29,6 +32,7 @@ def get_running_avd_dir() -> Path:
     # Fallback
     uid = os.getuid()
     return Path(f"/run/user/{uid}/avd/running")
+
 
 def parse_discovery_ini(ini_path: Path) -> Optional[RunningEmulatorInfo]:
     """Parse a pid_<PID>.ini file safely."""
@@ -55,6 +59,10 @@ def parse_discovery_ini(ini_path: Path) -> Optional[RunningEmulatorInfo]:
 
         if grpc_port <= 0:
             return None
+        
+        # If the emulator was started with -grpc-use-token, wait until token is written
+        if not grpc_token:
+            return None
 
         serial = int(data["port.serial"]) if "port.serial" in data else None
         adb = int(data["port.adb"]) if "port.adb" in data else None
@@ -75,6 +83,7 @@ def parse_discovery_ini(ini_path: Path) -> Optional[RunningEmulatorInfo]:
         logger.warning("Error parsing discovery fields from %s: %s", ini_path, e)
         return None
 
+
 def find_running_emulator_by_pid(pid: int) -> Optional[RunningEmulatorInfo]:
     """Find discovery info for a specific PID."""
     running_dir = get_running_avd_dir()
@@ -82,6 +91,7 @@ def find_running_emulator_by_pid(pid: int) -> Optional[RunningEmulatorInfo]:
     if ini_path.exists():
         return parse_discovery_ini(ini_path)
     return None
+
 
 def find_all_running_emulators() -> Dict[int, RunningEmulatorInfo]:
     """Discover all currently running emulators."""

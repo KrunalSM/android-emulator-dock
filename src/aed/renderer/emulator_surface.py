@@ -5,12 +5,15 @@ proper aspect ratio preservation, and coordinate transformation for input.
 """
 
 from typing import Optional, Tuple
-from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal
-from PyQt6.QtGui import QImage, QPainter, QColor
+
+from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
+from PyQt6.QtGui import QColor, QImage, QPainter
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
+
 from aed.logging_util import get_logger
 
 logger = get_logger("renderer.surface")
+
 
 class EmulatorSurface(QOpenGLWidget):
     """OpenGL-backed viewport for rendering emulator frames and handling user input."""

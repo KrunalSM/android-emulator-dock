@@ -1,12 +1,14 @@
 """Dedicated service for capturing emulator screenshots via official gRPC API."""
 
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
-from datetime import datetime
+
 from aed.connection.client import EmulatorConnection
 from aed.logging_util import get_logger
 
 logger = get_logger("connection.screenshot")
+
 
 class ScreenshotService:
     """Handles capturing emulator screenshots without capturing any surrounding Dock UI."""
@@ -37,6 +39,7 @@ class ScreenshotService:
         try:
             # Construct QImage from received RGBA bytes and save as PNG
             from PyQt6.QtGui import QImage
+
             fmt = img_data.format
             w = fmt.width
             h = fmt.height
