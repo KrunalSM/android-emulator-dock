@@ -74,28 +74,33 @@ git clone https://github.com/your-org/android-emulator-dock.git
 cd android-emulator-dock
 ```
 
-### 2. Set Up Virtual Environment
+### 2. Global Installation (Recommended for End Users)
+To install AED as a global standalone command available in your user `PATH` (typically `~/.local/bin`), run:
+```bash
+pip install --user .
+```
+*(Alternatively, use `pipx install .` for isolated environments).*
+
+### 3. Local Development Installation
+If you are developing AED, use a virtual environment:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-```
-
-### 3. Install Dependencies
-```bash
 pip install -e .
 ```
-This installs the required dependencies (`PyQt6`, `grpcio`, `protobuf`) and registers the `android-emulator-dock` and `aed` console commands.
 
 ---
 
 ## Usage
 
 ### Launching AED
-Run AED directly using the installed entrypoint:
+If installed globally or within an active virtual environment, you can launch the application directly from your terminal using either of the registered commands:
 ```bash
-android-emulator-dock
+aed
 ```
-Or run as a module:
+*(or the longer version: `android-emulator-dock`)*
+
+If you prefer to run it as a module without installing:
 ```bash
 PYTHONPATH=src:proto python3 -m aed.main
 ```
