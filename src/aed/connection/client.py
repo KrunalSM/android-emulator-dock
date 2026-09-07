@@ -9,10 +9,17 @@ from typing import Iterator, Optional
 
 import grpc
 
-# Add generated proto dir to sys.path
-proto_dir = Path(__file__).resolve().parent.parent.parent.parent / "proto"
-if str(proto_dir) not in sys.path:
-    sys.path.insert(0, str(proto_dir))
+# Add generated proto dir to sys.path (handles both dev tree and site-packages)
+_client_dir = Path(__file__).resolve().parent
+_possible_proto_dirs = [
+    _client_dir.parent.parent.parent.parent / "proto",  # Dev source tree (AED/proto)
+    _client_dir.parent.parent / "proto",                # Installed site-packages (site-packages/proto)
+]
+for pdir in _possible_proto_dirs:
+    if pdir.exists() and (pdir / "emulator_controller_pb2.py").exists():
+        if str(pdir) not in sys.path:
+            sys.path.insert(0, str(pdir))
+        break
 
 import emulator_controller_pb2 as ec  # noqa: E402
 import emulator_controller_pb2_grpc as ec_grpc  # noqa: E402
