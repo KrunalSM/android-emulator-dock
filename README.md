@@ -76,15 +76,23 @@ git clone https://github.com/your-org/android-emulator-dock.git
 cd android-emulator-dock
 ```
 
-### 2. Global Installation (Recommended for End Users)
-To install AED as a global standalone command available in your user `PATH` (typically `~/.local/bin`), run:
+### 2. Quick Installation (Recommended)
+AED includes a `Makefile` that fully automates the installation of the Python package, desktop entry, and application icon into your local user environment (`~/.local/`):
+```bash
+make install
+```
+*To completely uninstall the application later, simply run `make uninstall`.*
+
+### 3. Manual / Advanced Installation
+If you prefer not to use `make`, you can install the components manually:
+
+**Python Package:**
 ```bash
 pip install --user .
 ```
 *(Alternatively, use `pipx install .` for isolated environments).*
 
-### 3. Desktop Entry Integration
-To add AED to your system's application launcher (GNOME, KDE, etc.) with the official icon, run the following commands to copy the provided desktop file and icon to your standard user directories:
+**Desktop Entry & Icon:**
 ```bash
 mkdir -p ~/.local/share/icons/hicolor/512x512/apps/ ~/.local/share/applications/
 cp assets/logo.png ~/.local/share/icons/hicolor/512x512/apps/android-emulator-dock.png
@@ -93,13 +101,13 @@ gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor || true
 update-desktop-database ~/.local/share/applications/ || true
 ```
 
-### 4. Local Development Installation
-If you are developing AED, use a virtual environment:
+### 4. Local Development
+For developers, the Makefile can instantly provision an isolated development environment:
 ```bash
-python3 -m venv .venv
+make dev
 source .venv/bin/activate
-pip install -e .
 ```
+You can also run the full test suite using `make test`.
 
 ---
 
