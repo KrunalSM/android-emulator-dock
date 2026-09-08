@@ -13,6 +13,117 @@ Unlike traditional setups that attempt fragile X11 window reparenting or composi
 
 ---
 
+## Why Android Emulator Dock?
+
+This project started with a very specific problem.
+
+I use a modern Wayland desktop with tiling and multiple monitors. When I tried using the Android Emulator's AVD window there, the emulator itself worked perfectly, but the **emulator toolbar and its separate windows did not behave well with the desktop's window management**.
+
+In my case, using **Noctalia with Umbriel**, the emulator toolbar could behave strangely across two displays. Instead of behaving like one cohesive application window, parts of the emulator UI could float around independently, making tiling and workspace management awkward. Umbriel is designed around Wayland-native window management, including tiling layouts, per-output workspaces, and multi-monitor workflows.
+
+There was another particularly annoying problem:
+
+> **Closing one AVD's toolbar could close the toolbars for the other running AVDs as well.**
+
+The emulator itself wasn't the problem. The problem was the way its UI was represented as windows and how those windows interacted with the compositor.
+
+I wanted something much simpler:
+
+**One normal application window that owns the emulator workspace.**
+
+### The idea
+
+Instead of trying to make the Android Emulator's existing windows cooperate with every Wayland compositor and tiling workflow, Android Emulator Dock provides a dedicated frontend around the official emulator.
+
+```text
+             Android Emulator
+                    │
+             Official gRPC APIs
+                    │
+                    ▼
+        ┌─────────────────────────┐
+        │   Android Emulator Dock │
+        │                         │
+        │  ┌─────────┐ ┌────────┐ │
+        │  │  AVD 1  │ │ AVD 2  │ │
+        │  │         │ │        │ │
+        │  └─────────┘ └────────┘ │
+        │                         │
+        │  ┌─────────┐            │
+        │  │  AVD 3  │            │
+        │  └─────────┘            │
+        └─────────────────────────┘
+                    │
+                    ▼
+             One Wayland window
+```
+
+The goal is **not to replace the Android Emulator**.
+
+The official emulator still does the actual work:
+
+* Android virtualization
+* Graphics
+* Audio
+* Microphone
+* Sensors
+* Location
+* Camera
+* Networking
+* Device controls
+* Snapshots
+* And the rest of the emulator functionality
+
+The Dock simply provides a different way to **host and interact with those emulator instances**.
+
+### Why this can be useful beyond my setup
+
+The original problem came from my own setup, but it isn't necessarily specific to Umbriel.
+
+Different Wayland compositors, desktop environments, tiling systems, multi-monitor configurations, and XWayland interactions can have different behavior around applications that create multiple related windows.
+
+Android Emulator Dock aims to avoid depending on that window arrangement entirely.
+
+Instead of:
+
+```text
+AVD
+ ├── Emulator window
+ ├── Toolbar window
+ ├── Additional UI windows
+ └── compositor manages all of them separately
+```
+
+the Dock provides:
+
+```text
+Android Emulator Dock
+ ├── AVD
+ ├── AVD
+ ├── AVD
+ └── emulator controls
+```
+
+as a single application workspace.
+
+### The goal
+
+I wanted the Android Emulator to behave like a **normal application in a Wayland desktop**:
+
+* one window
+* multiple emulator instances
+* predictable tiling
+* predictable multi-monitor behavior
+* no toolbar windows wandering around
+* no unrelated emulator instances disappearing together
+* all the normal emulator controls still available
+
+And that's what Android Emulator Dock is trying to provide.
+
+If you've encountered similar problems with Android Emulator windows on Linux, especially with Wayland or tiling window managers, this project may be useful to you too.
+
+---
+
 ## Architecture Overview
 
 ```text
