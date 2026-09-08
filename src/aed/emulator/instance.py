@@ -64,6 +64,9 @@ class EmulatorInstance(QObject):
         self._surface.touch_down.connect(self._on_touch_down)
         self._surface.touch_move.connect(self._on_touch_move)
         self._surface.touch_up.connect(self._on_touch_up)
+        # Handle multi-touch event
+        if hasattr(self._surface, 'touches_changed'):
+            self._surface.touches_changed.connect(self._on_touches_changed)
         self._surface.wheel_scrolled.connect(self._on_wheel)
 
     def _on_touch_down(self, x: int, y: int):
@@ -77,6 +80,10 @@ class EmulatorInstance(QObject):
     def _on_touch_up(self, x: int, y: int):
         if self._connection and self._connection.is_connected:
             self._connection.send_touch(x, y, pressure=0)
+
+    def _on_touches_changed(self, touches_data: list[dict]):
+        if self._connection and self._connection.is_connected:
+            self._connection.send_touches(touches_data)
 
     def _on_wheel(self, dx: int, dy: int):
         if self._connection and self._connection.is_connected:
@@ -248,14 +255,14 @@ class EmulatorInstance(QObject):
         self._set_state(EmulatorState.STOPPING)
         self._discovery_timer.stop()
 
+        if self._connection:
+            self._connection.disconnect()
+            self._connection = None
+
         if self._stream_worker:
             self._stream_worker.stop()
             self._stream_worker.wait(3000)
             self._stream_worker = None
-
-        if self._connection:
-            self._connection.disconnect()
-            self._connection = None
 
         self._screenshot_service = None
 

@@ -6,8 +6,8 @@ proper aspect ratio preservation, and coordinate transformation for input.
 
 from typing import Optional, Tuple
 
-from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QImage, QPainter
+from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal, QEvent
+from PyQt6.QtGui import QColor, QImage, QPainter, QEventPoint
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 
 from aed.logging_util import get_logger
@@ -22,12 +22,14 @@ class EmulatorSurface(QOpenGLWidget):
     touch_down = pyqtSignal(int, int)
     touch_move = pyqtSignal(int, int)
     touch_up = pyqtSignal(int, int)
+    touches_changed = pyqtSignal(list)
     wheel_scrolled = pyqtSignal(int, int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setMouseTracking(True)
+        self.setAttribute(Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self._current_image: Optional[QImage] = None
         self._device_width = 1080
         self._device_height = 2400
@@ -105,20 +107,31 @@ class EmulatorSurface(QOpenGLWidget):
         dev_y = int(v * self._device_height)
         return (dev_x, dev_y)
 
+    def _emit_mouse_touches(self, x: int, y: int, pressure: int):
+        touches = [{"x": x, "y": y, "pressure": pressure, "identifier": 0}]
+        
+        if getattr(self, '_is_simulating_multitouch', False):
+            mirror_x = self._device_width - x
+            mirror_y = self._device_height - y
+            touches.append({"x": mirror_x, "y": mirror_y, "pressure": pressure, "identifier": 1})
+            
+        self.touches_changed.emit(touches)
+
     def mousePressEvent(self, event):
         self.setFocus()
         if event.button() == Qt.MouseButton.LeftButton:
             self._is_mouse_down = True
+            self._is_simulating_multitouch = bool(event.modifiers() & Qt.KeyboardModifier.AltModifier)
             coords = self._widget_to_device_coords(event.position())
             if coords:
-                self.touch_down.emit(coords[0], coords[1])
+                self._emit_mouse_touches(coords[0], coords[1], 1)
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
         if self._is_mouse_down:
             coords = self._widget_to_device_coords(event.position())
             if coords:
-                self.touch_move.emit(coords[0], coords[1])
+                self._emit_mouse_touches(coords[0], coords[1], 1)
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
@@ -126,10 +139,34 @@ class EmulatorSurface(QOpenGLWidget):
             self._is_mouse_down = False
             coords = self._widget_to_device_coords(event.position())
             if coords:
-                self.touch_up.emit(coords[0], coords[1])
+                self._emit_mouse_touches(coords[0], coords[1], 0)
+            self._is_simulating_multitouch = False
         super().mouseReleaseEvent(event)
 
     def wheelEvent(self, event):
         delta = event.angleDelta()
-        self.wheel_scrolled.emit(delta.x(), delta.y())
+        # angleDelta is in eighths of a degree, usually 120 per scroll step
+        dx = delta.x() // 120
+        dy = delta.y() // 120
+        if dx != 0 or dy != 0:
+            self.wheel_scrolled.emit(dx, dy)
         super().wheelEvent(event)
+
+    def event(self, event):
+        if event.type() in (QEvent.Type.TouchBegin, QEvent.Type.TouchUpdate, QEvent.Type.TouchEnd):
+            touches_data = []
+            for pt in event.points():
+                coords = self._widget_to_device_coords(pt.position())
+                if coords:
+                    pressure = 0 if pt.state() == QEventPoint.State.Released else 1
+                    touches_data.append({
+                        "x": coords[0],
+                        "y": coords[1],
+                        "pressure": pressure,
+                        "identifier": pt.id()
+                    })
+            if touches_data:
+                self.touches_changed.emit(touches_data)
+            event.accept()
+            return True
+        return super().event(event)

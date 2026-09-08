@@ -349,13 +349,26 @@ class EmulatorSlot(QFrame):
         key_text = event.text()
         key_code = None
         if event.key() == Qt.Key.Key_Backspace:
-            key_code = "BackSpace"
+            key_code = "Backspace"
         elif event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:
             key_code = "Enter"
         elif event.key() == Qt.Key.Key_Escape:
             key_code = "Escape"
         elif event.key() == Qt.Key.Key_Tab:
             key_code = "Tab"
+        elif event.key() == Qt.Key.Key_Up:
+            key_code = "ArrowUp"
+        elif event.key() == Qt.Key.Key_Down:
+            key_code = "ArrowDown"
+        elif event.key() == Qt.Key.Key_Left:
+            key_code = "ArrowLeft"
+        elif event.key() == Qt.Key.Key_Right:
+            key_code = "ArrowRight"
 
-        self.instance.send_key_event(key_text=key_text if key_text else None, key_code=key_code)
+        if key_code:
+            key_text = ""
+
+        if key_code or key_text:
+            self.instance.send_key_event(key_text=key_text if key_text else None, key_code=key_code)
+            
         super().keyPressEvent(event)

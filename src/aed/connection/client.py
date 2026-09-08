@@ -148,6 +148,25 @@ class EmulatorConnection:
         except Exception as e:
             logger.warning("Error sending touch event: %s", e)
 
+    def send_touches(self, touches_data: list[dict]):
+        """Send multiple touch points simultaneously."""
+        if not self._is_connected or not self._controller_stub:
+            return
+        try:
+            touches = []
+            for t_data in touches_data:
+                touches.append(ec.Touch(
+                    x=t_data["x"],
+                    y=t_data["y"],
+                    pressure=t_data.get("pressure", 1),
+                    identifier=t_data.get("identifier", 0)
+                ))
+            if touches:
+                evt = ec.TouchEvent(touches=touches)
+                self._controller_stub.sendTouch(evt, metadata=self._metadata())
+        except Exception as e:
+            logger.warning("Error sending multi-touch event: %s", e)
+
     def send_key(self, text: Optional[str] = None, key_code: Optional[str] = None, event_type: str = "keypress"):
         """Send keyboard event."""
         if not self._is_connected or not self._controller_stub:
