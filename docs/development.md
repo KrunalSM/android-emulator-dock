@@ -29,12 +29,19 @@ Thank you for contributing to **Android Emulator Dock (AED)**! This document pro
 - Git
 
 ### Editable Installation
+Using `uv` (recommended):
 ```bash
 git clone https://github.com/your-org/android-emulator-dock.git
 cd android-emulator-dock
+uv venv .venv
+source .venv/bin/activate
+uv pip install -e .
+```
+Or with standard `venv`:
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]" || pip install -e .
+pip install -e .
 ```
 
 ---

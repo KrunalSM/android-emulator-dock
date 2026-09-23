@@ -1,8 +1,15 @@
 """Unit tests for Android Emulator Dock components."""
 
+import sys
 import unittest
 import tempfile
 from pathlib import Path
+
+# Ensure repo src/ and proto/ are in sys.path
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT / "proto"))
+sys.path.insert(0, str(REPO_ROOT / "src"))
+
 from PyQt6.QtCore import QRectF, QPointF
 from aed.logging_util import SecretScrubbingFormatter
 from aed.avd.discovery import parse_ini_file

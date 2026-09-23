@@ -3,9 +3,10 @@
 
 from PyQt6.QtCore import QPoint, Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QKeyEvent
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QPushButton, QToolTip, QVBoxLayout
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QMessageBox, QPushButton, QToolTip, QVBoxLayout
 
 from aed.emulator.instance import EmulatorInstance
+from aed.emulator.launcher import GpuMode
 from aed.emulator.state import EmulatorState
 
 
@@ -50,6 +51,19 @@ class EmulatorSlot(QFrame):
         self.fps_lbl = QLabel("", self)
         self.fps_lbl.setStyleSheet("color: #00d26a; font-size: 11px; font-weight: bold;")
 
+        self.gpu_badge = QLabel("", self)
+        self.gpu_badge.setStyleSheet("""
+            QLabel {
+                color: #76b900;
+                border: 1px solid #76b900;
+                border-radius: 3px;
+                padding: 1px 4px;
+                font-size: 10px;
+                font-weight: bold;
+            }
+        """)
+        self.gpu_badge.setVisible(False)
+
         self.btn_power = QPushButton("Start", self)
         self.btn_power.setStyleSheet("""
             QPushButton {
@@ -84,6 +98,8 @@ class EmulatorSlot(QFrame):
         h_layout.addWidget(self.state_lbl)
         h_layout.addSpacing(8)
         h_layout.addWidget(self.fps_lbl)
+        h_layout.addSpacing(8)
+        h_layout.addWidget(self.gpu_badge)
         h_layout.addStretch()
         h_layout.addWidget(self.btn_power)
         h_layout.addWidget(self.btn_close)
@@ -190,7 +206,9 @@ class EmulatorSlot(QFrame):
         self.instance.state_changed.connect(self._on_state_changed)
         self.instance.fps_updated.connect(self._on_fps_updated)
         self.instance.screenshot_saved.connect(self._on_screenshot_saved)
+        self.instance.error_occurred.connect(self._on_error_occurred)
         self._on_state_changed(self.instance.state)
+        self.update_gpu_indicator()
 
     def _show_more_menu(self):
         """Display full hierarchical menu of official Extended Controls."""
@@ -219,6 +237,23 @@ class EmulatorSlot(QFrame):
         # Quick Actions
         fp_action = menu.addAction("Touch Fingerprint Sensor")
         fp_action.triggered.connect(lambda: self.instance.send_fingerprint(1))
+
+        # GPU Rendering Submenu
+        gpu_menu = menu.addMenu("GPU Rendering")
+        gpu_menu.setToolTip("Configure GPU rendering for this emulator instance")
+        can_change_gpu = self.instance.state.can_start()
+
+        act_auto = gpu_menu.addAction("Automatic / Default")
+        act_auto.setCheckable(True)
+        act_auto.setChecked(self.instance.gpu_mode == GpuMode.AUTOMATIC)
+        act_auto.setEnabled(can_change_gpu)
+        act_auto.triggered.connect(lambda: self._set_gpu_mode(GpuMode.AUTOMATIC))
+
+        act_nvidia = gpu_menu.addAction("NVIDIA GPU")
+        act_nvidia.setCheckable(True)
+        act_nvidia.setChecked(self.instance.gpu_mode == GpuMode.NVIDIA)
+        act_nvidia.setEnabled(can_change_gpu)
+        act_nvidia.triggered.connect(lambda: self._set_gpu_mode(GpuMode.NVIDIA))
 
         # Fold/Unfold Posture Submenu
         fold_menu = menu.addMenu("Fold / Posture")
@@ -274,6 +309,31 @@ class EmulatorSlot(QFrame):
 
     def _on_screenshot_saved(self, path_str: str):
         pass
+
+    def update_gpu_indicator(self):
+        """Update the slot header badge based on current instance GPU mode."""
+        if self.instance.gpu_mode == GpuMode.NVIDIA:
+            self.gpu_badge.setText("NVIDIA")
+            self.gpu_badge.setToolTip("NVIDIA GPU Rendering (PRIME offload + host GPU)")
+            self.gpu_badge.setVisible(True)
+        else:
+            self.gpu_badge.setVisible(False)
+
+    def _set_gpu_mode(self, mode: GpuMode):
+        """Explicitly change GPU rendering mode for this instance."""
+        self.instance.set_custom_gpu_mode(mode)
+        self.update_gpu_indicator()
+
+    def _on_error_occurred(self, err_msg: str):
+        """Handle emulator errors with clear diagnostic display and alert."""
+        self.state_lbl.setText("Failed")
+        self.state_lbl.setToolTip(err_msg)
+        if self.isVisible():
+            QMessageBox.warning(
+                self,
+                f"Emulator Error - {self.instance.avd.display_name}",
+                f"{err_msg}\n\nYou can switch GPU Rendering to 'Automatic / Default' and try again.",
+            )
 
     def _toggle_power(self):
         if self.instance.state.can_start():

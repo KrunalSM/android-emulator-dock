@@ -10,6 +10,7 @@ from aed.connection.client import EmulatorConnection
 from aed.connection.screenshot_service import ScreenshotService
 from aed.connection.stream_worker import FrameStreamWorker
 from aed.emulator.discovery import RunningEmulatorInfo, find_running_emulator_by_pid
+from aed.emulator.launcher import EmulatorLauncher, GpuMode
 from aed.emulator.state import EmulatorState
 from aed.logging_util import get_logger
 from aed.renderer.emulator_surface import EmulatorSurface
@@ -25,11 +26,19 @@ class EmulatorInstance(QObject):
     error_occurred = pyqtSignal(str)
     screenshot_saved = pyqtSignal(str)
 
-    def __init__(self, avd: AvdInfo, emulator_binary: Path, parent: Optional[QObject] = None):
+    def __init__(
+        self,
+        avd: AvdInfo,
+        emulator_binary: Path,
+        gpu_mode: GpuMode | str = GpuMode.AUTOMATIC,
+        parent: Optional[QObject] = None,
+    ):
         super().__init__(parent)
         self.avd = avd
         self.emulator_binary = emulator_binary
         self.state = EmulatorState.STOPPED
+        self._gpu_mode: GpuMode = GpuMode.from_string(gpu_mode)
+        self._custom_gpu_override: bool = False
 
         self._process: Optional[QProcess] = None
         self._pid: Optional[int] = None
@@ -53,6 +62,29 @@ class EmulatorInstance(QObject):
     @property
     def connection(self) -> Optional[EmulatorConnection]:
         return self._connection
+
+    @property
+    def gpu_mode(self) -> GpuMode:
+        return self._gpu_mode
+
+    @gpu_mode.setter
+    def gpu_mode(self, mode: GpuMode | str):
+        if not self.state.can_start():
+            logger.warning("[%s] Cannot change GPU mode while in state %s", self.avd.name, self.state)
+            return
+        new_mode = GpuMode.from_string(mode) if isinstance(mode, str) else mode
+        if self._gpu_mode != new_mode:
+            self._gpu_mode = new_mode
+            logger.info("[%s] GPU mode updated to %s", self.avd.name, new_mode.display_name())
+
+    @property
+    def has_custom_gpu_override(self) -> bool:
+        return self._custom_gpu_override
+
+    def set_custom_gpu_mode(self, mode: GpuMode | str):
+        """Explicit per-instance override selected by user."""
+        self._custom_gpu_override = True
+        self.gpu_mode = mode
 
     def _set_state(self, new_state: EmulatorState):
         if self.state != new_state:
@@ -148,6 +180,15 @@ class EmulatorInstance(QObject):
             logger.warning("[%s] Cannot start in state %s", self.avd.name, self.state)
             return
 
+        if self.gpu_mode == GpuMode.NVIDIA:
+            available, reason = EmulatorLauncher.check_nvidia_availability()
+            if not available:
+                self._set_state(EmulatorState.FAILED)
+                error_msg = reason or "NVIDIA GPU rendering is unavailable on this system."
+                logger.error("[%s] Launch aborted: %s", self.avd.name, error_msg)
+                self.error_occurred.emit(error_msg)
+                return
+
         self._set_state(EmulatorState.LAUNCHING)
         
         # Clean up stale locks that could prevent launch
@@ -162,27 +203,30 @@ class EmulatorInstance(QObject):
                 except OSError:
                     pass
 
-        self._process = QProcess(self)
-
-        # Retain hosting flags, remove -no-audio and -no-boot-anim for complete parity
-        args = [
-            "-avd",
-            self.avd.name,
-            "-qt-hide-window",
-            "-grpc-use-token",
-            "-idle-grpc-timeout",
-            "300",
-        ]
+        self._process = EmulatorLauncher.create_process(gpu_mode=self.gpu_mode, parent=self)
+        args = EmulatorLauncher.build_arguments(self.avd.name, self.gpu_mode)
 
         self._process.errorOccurred.connect(self._on_process_error)
         self._process.finished.connect(self._on_process_finished)
 
-        logger.info("[%s] Launching emulator: %s %s", self.avd.name, self.emulator_binary, " ".join(args))
+        logger.info(
+            "[%s] Launching emulator: %s %s (GPU: %s)",
+            self.avd.name,
+            self.emulator_binary,
+            " ".join(args),
+            self.gpu_mode.display_name(),
+        )
         self._process.start(str(self.emulator_binary), args)
 
         if not self._process.waitForStarted(3000):
             self._set_state(EmulatorState.FAILED)
-            self.error_occurred.emit(f"Failed to start emulator binary for {self.avd.name}")
+            err_msg = f"Failed to start emulator binary for {self.avd.name}"
+            if self.gpu_mode == GpuMode.NVIDIA:
+                err_msg += (
+                    " with NVIDIA GPU rendering. Verify NVIDIA driver compatibility, "
+                    "or switch GPU Rendering to 'Automatic / Default'."
+                )
+            self.error_occurred.emit(err_msg)
             return
 
         self._pid = self._process.processId()
@@ -279,9 +323,20 @@ class EmulatorInstance(QObject):
     def _on_process_error(self, err):
         logger.error("[%s] Process error: %s", self.avd.name, err)
         self._set_state(EmulatorState.FAILED)
+        msg = f"Process error for {self.avd.name}: {err}"
+        if self.gpu_mode == GpuMode.NVIDIA:
+            msg += "\nNVIDIA GPU mode was active. Ensure NVIDIA drivers are functioning, or switch GPU Rendering to 'Automatic / Default'."
+        self.error_occurred.emit(msg)
 
     def _on_process_finished(self, exit_code, exit_status):
         logger.info("[%s] Process finished (code=%d, status=%s)", self.avd.name, exit_code, exit_status)
         if self.state != EmulatorState.STOPPED:
             self._surface.clear()
-            self._set_state(EmulatorState.DISCONNECTED)
+            if exit_code != 0 and self.gpu_mode == GpuMode.NVIDIA:
+                self._set_state(EmulatorState.FAILED)
+                self.error_occurred.emit(
+                    f"Emulator exited with code {exit_code} in NVIDIA GPU mode. "
+                    "Verify NVIDIA PRIME offload libraries and driver compatibility, or switch GPU Rendering to 'Automatic / Default'."
+                )
+            else:
+                self._set_state(EmulatorState.DISCONNECTED)

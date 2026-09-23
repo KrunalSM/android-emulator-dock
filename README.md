@@ -173,6 +173,8 @@ If you've encountered similar problems with Android Emulator windows on Linux, e
 Before running AED, ensure your Linux environment has:
 - **Operating System**: Linux with Wayland desktop session (GNOME, KDE Plasma, Sway, Hyprland, etc.) or X11 fallback.
 - **Python**: Version 3.10 or higher.
+- **uv**: Fast Python package and tool runner (required / recommended for modern PEP 668 Linux distros).
+  - Install via your package manager (e.g. `pacman -S uv` on Arch Linux) or `curl -LsSf https://astral.sh/uv/install.sh | sh`.
 - **Android SDK**: Official Android SDK with command-line tools and emulator (`emulator >= 34.0.0`).
   - AED automatically discovers the SDK from `$ANDROID_HOME`, `$ANDROID_SDK_ROOT`, `PATH`, or standard Linux paths (`~/Android/Sdk`, `/opt/android-sdk`, etc.).
 - **Host Audio**: PulseAudio or PipeWire with PulseAudio compatibility (`pipewire-pulse`).
@@ -188,20 +190,20 @@ cd android-emulator-dock
 ```
 
 ### 2. Quick Installation (Recommended)
-AED includes a `Makefile` that fully automates the installation of the Python package, desktop entry, and application icon into your local user environment (`~/.local/`):
+AED includes a `Makefile` that automatically uses `uv tool install` (with fallbacks to `pipx`/`pip`) to install the application in an isolated environment and place the desktop launcher and icon into `~/.local/`:
 ```bash
 make install
 ```
 *To completely uninstall the application later, simply run `make uninstall`.*
 
 ### 3. Manual / Advanced Installation
-If you prefer not to use `make`, you can install the components manually:
+If you prefer not to use `make`, you can install using `uv`:
 
-**Python Package:**
+**Install Application (Isolated via uv tool):**
 ```bash
-pip install --user .
+uv tool install . --force
 ```
-*(Alternatively, use `pipx install .` for isolated environments).*
+*(Or create a custom venv: `uv venv ~/.local/share/aed/venv && uv pip install --python ~/.local/share/aed/venv .`)*
 
 **Desktop Entry & Icon:**
 ```bash
@@ -213,11 +215,13 @@ update-desktop-database ~/.local/share/applications/ || true
 ```
 
 ### 4. Local Development
-For developers, the Makefile can instantly provision an isolated development environment:
+For developers, the Makefile quickly provisions an isolated development virtual environment using `uv`:
 ```bash
 make dev
 source .venv/bin/activate
 ```
+*(Alternatively: `uv venv .venv && uv pip install -e .`)*
+
 You can also run the full test suite using `make test`.
 
 ---

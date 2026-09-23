@@ -2,12 +2,13 @@
 
 from typing import List
 
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import QSettings, QTimer
 from PyQt6.QtWidgets import QComboBox, QLabel, QMainWindow, QMessageBox, QPushButton, QStatusBar, QToolBar
 
 from aed.avd.discovery import list_avds
 from aed.avd.model import AvdInfo
 from aed.emulator.instance import EmulatorInstance
+from aed.emulator.launcher import GpuMode
 from aed.logging_util import get_logger
 from aed.platform.sdk import find_android_sdk, get_emulator_binary
 from aed.workspace.manager import WorkspaceLayoutManager
@@ -110,6 +111,23 @@ class MainWindow(QMainWindow):
         self.layout_combo.currentTextChanged.connect(self._on_layout_changed)
         toolbar.addWidget(self.layout_combo)
 
+        toolbar.addSeparator()
+
+        toolbar.addWidget(QLabel(" GPU Rendering: "))
+        self.gpu_combo = QComboBox(self)
+        self.gpu_combo.addItem("Automatic / Default", "automatic")
+        self.gpu_combo.addItem("NVIDIA GPU", "nvidia")
+        self.gpu_combo.setToolTip(
+            "NVIDIA GPU Rendering:\n"
+            "Use NVIDIA PRIME offloading and host GPU rendering for emulator instances."
+        )
+        saved_gpu = self._load_gpu_setting()
+        idx = self.gpu_combo.findData(saved_gpu)
+        if idx >= 0:
+            self.gpu_combo.setCurrentIndex(idx)
+        self.gpu_combo.currentIndexChanged.connect(self._on_gpu_mode_changed)
+        toolbar.addWidget(self.gpu_combo)
+
         # Central workspace
         self.workspace = WorkspaceLayoutManager(self)
         self.setCentralWidget(self.workspace)
@@ -132,6 +150,35 @@ class MainWindow(QMainWindow):
         else:
             self.status_bar.showMessage("No AVDs found.")
 
+    SETTINGS_KEY_GPU = "gpu_rendering"
+
+    def _load_gpu_setting(self) -> str:
+        """Load persisted GPU rendering setting, defaulting to 'automatic'."""
+        settings = QSettings("AED", "Android Emulator Dock")
+        val = settings.value(self.SETTINGS_KEY_GPU, "automatic", type=str)
+        return val if val in ("automatic", "nvidia") else "automatic"
+
+    def _save_gpu_setting(self, mode_str: str):
+        """Persist user GPU rendering preference."""
+        settings = QSettings("AED", "Android Emulator Dock")
+        settings.setValue(self.SETTINGS_KEY_GPU, mode_str)
+
+    @property
+    def current_gpu_mode(self) -> str:
+        """Current globally selected GPU rendering mode."""
+        return self.gpu_combo.currentData() or "automatic"
+
+    def _on_gpu_mode_changed(self, index: int):
+        """Handle global GPU rendering dropdown selection change."""
+        mode_str = self.current_gpu_mode
+        self._save_gpu_setting(mode_str)
+        logger.info("Global GPU rendering setting changed to: %s", mode_str)
+        # Update stopped slots that haven't been explicitly overridden
+        for slot in self.workspace.slots:
+            if slot.instance.state.can_start() and not slot.instance.has_custom_gpu_override:
+                slot.instance.gpu_mode = mode_str
+                slot.update_gpu_indicator()
+
     def _add_selected_avd(self):
         idx = self.avd_combo.currentIndex()
         if idx < 0 or idx >= len(self._avds):
@@ -146,10 +193,17 @@ class MainWindow(QMainWindow):
             )
             return
 
-        instance = EmulatorInstance(avd=avd, emulator_binary=self._emulator_bin, parent=self)
+        instance = EmulatorInstance(
+            avd=avd,
+            emulator_binary=self._emulator_bin,
+            gpu_mode=self.current_gpu_mode,
+            parent=self,
+        )
         slot = EmulatorSlot(instance=instance, parent=self.workspace)
         self.workspace.add_slot(slot)
-        self.status_bar.showMessage(f"Added {avd.display_name} to workspace.")
+        self.status_bar.showMessage(
+            f"Added {avd.display_name} to workspace (GPU: {instance.gpu_mode.display_name()})."
+        )
 
     def _on_layout_changed(self, text: str):
         mapping = {
